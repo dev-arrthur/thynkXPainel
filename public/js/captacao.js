@@ -101,6 +101,19 @@ async function runCaptacao(payload){
   return p;
 }
 
+
+function toggleCaptureLoading(show, message='Buscando LEADS, aguarde...') {
+  const overlay = document.getElementById('captureLoadingOverlay');
+  const text = document.getElementById('captureLoadingText');
+  const submitBtn = document.querySelector('#captureForm button[type="submit"], #captureForm button.btn-xp');
+  if (overlay) overlay.classList.toggle('d-none', !show);
+  if (text) text.textContent = message;
+  if (submitBtn) {
+    submitBtn.disabled = show;
+    submitBtn.textContent = show ? 'Buscando LEADS...' : 'Fazer a Captação';
+  }
+}
+
 function bindCaptureForm() {
   const scheduledSwitch=document.getElementById('scheduledSwitch');
   scheduledSwitch.addEventListener('change',()=>document.getElementById('scheduledFields').classList.toggle('d-none',!scheduledSwitch.checked));
@@ -132,13 +145,17 @@ function bindCaptureForm() {
         quantity: Number(document.getElementById('captureQuantity').value||5),
       };
       if(!payload.lat || !payload.lon) return showCaptureFeedback('Informe uma localização válida.');
+      toggleCaptureLoading(true);
       const result=await runCaptacao(payload);
       showCaptureFeedback(`Captação finalizada. ${result.created} registros criados.`, 'success');
       document.getElementById('captureForm').reset();
+      selectedLocation = null;
       await refreshCaptacaoList();
       await refreshCaptacaoStats();
     }catch(err){
       showCaptureFeedback(err.message || 'Falha ao executar captação.');
+    } finally {
+      toggleCaptureLoading(false);
     }
   });
 }

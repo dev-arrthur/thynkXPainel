@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const https = require('https');
 const express = require('express');
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
@@ -70,6 +71,44 @@ function categoryToOverpass(category) {
   if (c.includes('pet')) return 'shop=pet';
   if (c.includes('hotel') || c.includes('pous')) return 'tourism=hotel';
   return 'shop=*';
+}
+
+function requestJson(url, options = {}) {
+  if (typeof fetch === 'function') return fetch(url, options);
+
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(url);
+    const method = options.method || 'GET';
+    const headers = options.headers || {};
+    const body = options.body;
+
+    const req = https.request(
+      {
+        protocol: parsed.protocol,
+        hostname: parsed.hostname,
+        port: parsed.port,
+        path: `${parsed.pathname}${parsed.search}`,
+        method,
+        headers,
+      },
+      (res) => {
+        let data = '';
+        res.on('data', (chunk) => { data += chunk; });
+        res.on('end', () => {
+          resolve({
+            ok: res.statusCode >= 200 && res.statusCode < 300,
+            status: res.statusCode,
+            text: async () => data,
+            json: async () => JSON.parse(data || 'null'),
+          });
+        });
+      },
+    );
+
+    req.on('error', reject);
+    if (body) req.write(body);
+    req.end();
+  });
 }
 
 
@@ -363,7 +402,7 @@ app.get('/api/captacao/locations', async (req, res) => {
     const q = (req.query.q || '').trim();
     if (!q) return res.json([]);
     const url = `https://nominatim.openstreetmap.org/search?format=json&countrycodes=br&limit=8&q=${encodeURIComponent(q)}`;
-    const r = await fetch(url, { headers: { 'User-Agent': 'thynkxp-painel/1.0' } });
+    const r = await requestJson(url, { headers: { 'User-Agent': 'thynkxp-painel/1.0' } });
     const data = await r.json();
     res.json((data || []).map((d) => ({
       display_name: d.display_name,
@@ -396,15 +435,33 @@ app.post('/api/captacao/run', async (req, res) => {
 
     const qty = Math.min(10, Math.max(1, Number(quantity || 5)));
     const rad = Math.min(30000, Math.max(500, Number(radius || 3000)));
+    const latNum = Number(lat);
+    const lonNum = Number(lon);
+
+    if (!Number.isFinite(latNum) || !Number.isFinite(lonNum)) {
+      return res.status(400).json({ message: 'Localização inválida. Selecione uma sugestão válida.' });
+    }
+
     const overpassTag = categoryToOverpass(category);
 
-    const query = `[out:json][timeout:25];(node[${overpassTag}](around:${rad},${lat},${lon});way[${overpassTag}](around:${rad},${lat},${lon});relation[${overpassTag}](around:${rad},${lat},${lon}););out center tags ${qty};`;
-    const or = await fetch('https://overpass-api.de/api/interpreter', {
+    const query = `[out:json][timeout:25];(node[${overpassTag}](around:${rad},${latNum},${lonNum});way[${overpassTag}](around:${rad},${latNum},${lonNum});relation[${overpassTag}](around:${rad},${latNum},${lonNum}););out center tags ${qty};`;
+    const or = await requestJson('https://overpass-api.de/api/interpreter', {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain' },
       body: query,
     });
-    const od = await or.json();
+
+    if (!or.ok) {
+      const overpassError = await or.text();
+      return res.status(502).json({ message: 'Serviço de mapas indisponível no momento.', details: overpassError.slice(0, 160) });
+    }
+
+    let od;
+    try {
+      od = await or.json();
+    } catch {
+      return res.status(502).json({ message: 'Resposta inválida do serviço de mapas.' });
+    }
     const elements = (od.elements || []).slice(0, qty);
 
     const docs = [];

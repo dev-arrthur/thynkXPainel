@@ -8,6 +8,13 @@
 <div class="col-lg-7"><div class="glass-card p-3 mb-3"><h6>Mapa de captações concluídas</h6><div id="captureHeatMap" style="height:280px;border-radius:12px;"></div><small class="text-muted">Vermelho (0-3), Amarelo (4-6), Verde (7-11), Azul (12-30)</small></div><div class="glass-card p-3"><h6>Empresas buscadas (linha)</h6><canvas id="captureTimelineChart" height="95"></canvas></div></div></div>
 </section></main>
 
+<div id="captureLoadingOverlay" class="position-fixed top-0 start-0 w-100 h-100 d-none d-flex align-items-center justify-content-center" style="background:rgba(15,23,42,.55);z-index:2000;">
+  <div class="glass-card p-4 text-center" style="max-width:360px;">
+    <div class="spinner-border text-warning mb-3" role="status" aria-hidden="true"></div>
+    <p id="captureLoadingText" class="mb-0 fw-semibold">Buscando LEADS, aguarde...</p>
+  </div>
+</div>
+
 <div class="offcanvas offcanvas-end" tabindex="-1" id="capturePanel" style="width:560px;"><div class="offcanvas-header"><h5>Nova Captação</h5><button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button></div><div class="offcanvas-body"><form id="captureForm" class="d-grid gap-2"><hr><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="scheduledSwitch"><label class="form-check-label">Agendada?</label></div><div id="scheduledFields" class="d-none"><input type="datetime-local" id="scheduledAt" class="form-control"></div>
 <input id="captureCategory" class="form-control" list="captureCategoryList" placeholder="Categoria"><datalist id="captureCategoryList"></datalist>
 <input id="captureLocation" class="form-control" list="captureLocationList" placeholder="Localização"><datalist id="captureLocationList"></datalist>
