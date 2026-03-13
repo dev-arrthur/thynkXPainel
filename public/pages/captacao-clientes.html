@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Captação de Clientes</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body class="bg-grid">
+  <div id="sidebarMount"></div>
+
+  <main class="content-area">
+    <section class="glass-card p-4 reveal">
+      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <h1 class="h4 mb-0">Gerenciamento de Captação</h1>
+        <button class="btn btn-xp" data-bs-toggle="offcanvas" data-bs-target="#capturePanel">Iniciar Captação</button>
+      </div>
+      <hr>
+
+      <div id="captureFeedback" class="alert d-none"></div>
+
+
+      <div class="glass-card p-3 mb-3">
+        <h6 class="mb-2">Busca de Empresas Reais</h6>
+        <div class="row g-2">
+          <div class="col-md-4"><input id="realSearchTerm" class="form-control" placeholder="Nome/termo da empresa"></div>
+          <div class="col-md-3"><input id="realSearchCategory" class="form-control" placeholder="Categoria"></div>
+          <div class="col-md-3"><input id="realSearchLocation" class="form-control" placeholder="Cidade/Bairro"></div>
+          <div class="col-md-2"><input id="realSearchRadius" type="number" min="500" max="30000" value="5000" class="form-control" placeholder="Raio"></div>
+          <div class="col-md-4 d-flex gap-3 align-items-center">
+            <div class="form-check"><input class="form-check-input" id="realHasPhone" type="checkbox"><label class="form-check-label">Com telefone</label></div>
+            <div class="form-check"><input class="form-check-input" id="realHasEmail" type="checkbox"><label class="form-check-label">Com e-mail</label></div>
+            <div class="form-check"><input class="form-check-input" id="realHasWebsite" type="checkbox"><label class="form-check-label">Com site</label></div>
+          </div>
+          <div class="col-md-2"><input id="realSearchLimit" type="number" min="1" max="50" value="15" class="form-control" placeholder="Limite"></div>
+          <div class="col-md-2"><button id="realSearchBtn" class="btn btn-xp w-100" type="button">Buscar Empresas</button></div>
+          <div class="col-md-4"><small id="realSearchInfo" class="text-muted">Fonte: OpenStreetMap/Overpass (dados reais).</small></div>
+        </div>
+        <div class="table-responsive mt-3" style="max-height:220px; overflow:auto;">
+          <table class="table table-modern table-sm align-middle">
+            <thead><tr><th>Empresa</th><th>Contato</th><th>Ações</th></tr></thead>
+            <tbody id="realSearchTableBody"><tr><td colspan="3" class="text-muted">Faça uma busca para carregar empresas reais.</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="row g-2 mb-3">
+        <div class="col-md-4">
+          <input id="captureSearchInput" class="form-control" placeholder="Buscar por nome, endereço, email, telefone...">
+        </div>
+        <div class="col-md-3">
+          <select id="captureStatusFilter" class="form-select">
+            <option value="">Todos os status</option>
+            <option>Pendente Captação</option>
+            <option>Aguardando Reunião</option>
+            <option>Pendente Proposta</option>
+            <option>Pendente Cliente</option>
+            <option>Captação Concluida</option>
+            <option>Captação Falhou</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <input id="captureCategoryFilter" class="form-control" placeholder="Filtrar por categoria">
+        </div>
+        <div class="col-md-2">
+          <button id="captureClearFilters" class="btn btn-outline-secondary w-100">Limpar</button>
+        </div>
+      </div>
+
+      <div class="row g-3">
+        <div class="col-lg-5">
+          <div class="glass-card p-3">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h6 class="mb-0">Lista</h6>
+              <small id="captureListCount" class="text-muted">0 registros</small>
+            </div>
+            <div class="table-responsive" style="max-height: 380px; overflow: auto;">
+              <table class="table table-modern align-middle">
+                <thead>
+                  <tr><th>Lead</th><th>Ações</th></tr>
+                </thead>
+                <tbody id="captureTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-lg-7">
+          <div class="glass-card p-3 mb-3">
+            <h6>Mapa de captações concluídas</h6>
+            <div id="captureHeatMap" style="height:280px;border-radius:12px;"></div>
+            <small class="text-muted">Vermelho (0-3), Amarelo (4-6), Verde (7-11), Azul (12+)</small>
+          </div>
+          <div class="glass-card p-3">
+            <h6>Empresas buscadas (linha)</h6>
+            <canvas id="captureTimelineChart" height="95"></canvas>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="captureLoadingOverlay" class="position-fixed top-0 start-0 w-100 h-100 d-none d-flex align-items-center justify-content-center" style="background:rgba(15,23,42,.55);z-index:2000;">
+    <div class="glass-card p-4 text-center" style="max-width:360px;">
+      <div class="spinner-border text-warning mb-3" role="status" aria-hidden="true"></div>
+      <p id="captureLoadingText" class="mb-0 fw-semibold">Buscando LEADS, aguarde...</p>
+    </div>
+  </div>
+
+  <div class="offcanvas offcanvas-end" tabindex="-1" id="capturePanel" style="width:560px;">
+    <div class="offcanvas-header">
+      <h5>Nova Captação</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+    </div>
+    <div class="offcanvas-body">
+      <form id="captureForm" class="d-grid gap-2">
+        <hr>
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" id="scheduledSwitch">
+          <label class="form-check-label">Agendada?</label>
+        </div>
+        <div id="scheduledFields" class="d-none">
+          <input type="datetime-local" id="scheduledAt" class="form-control">
+        </div>
+
+        <label class="small text-muted">Categoria (você pode digitar)</label>
+        <input id="captureCategory" class="form-control" list="captureCategoryList" placeholder="Categoria">
+        <datalist id="captureCategoryList"></datalist>
+        <small id="captureCategoryHint" class="text-muted">Dica: comece digitando para sugestões.</small>
+
+        <label class="small text-muted">Localização</label>
+        <input id="captureLocation" class="form-control" list="captureLocationList" placeholder="Localização">
+        <datalist id="captureLocationList"></datalist>
+
+        <input id="captureRadius" type="number" class="form-control" min="500" max="30000" value="3000" placeholder="Raio (m)">
+        <div id="captureLocationMap" style="height:220px;border-radius:12px;"></div>
+
+        <hr>
+        <label>Coletar Informações?</label>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="collectInfo" checked>
+          <label class="form-check-label">Nome, E-mail, Telefone, Site, Redes Sociais, Endereço</label>
+        </div>
+
+        <hr>
+        <h6>Quantidade de Captações</h6>
+        <input id="captureQuantity" type="number" class="form-control" min="1" max="10" value="5" placeholder="Quantidade de buscas por vez (1 a 10)">
+        <button class="btn btn-xp mt-2" type="submit">Fazer a Captação</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="offcanvas offcanvas-end" tabindex="-1" id="captureDetailsPanel" style="width:520px;">
+    <div class="offcanvas-header">
+      <h5>Dados da Captação</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+    </div>
+    <div class="offcanvas-body" id="captureDetailsBody"></div>
+  </div>
+
+  <div class="modal fade" id="captureStatusModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Alterar status da captação</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="captureStatusLeadId">
+          <label class="form-label">Novo status</label>
+          <select id="captureStatusSelect" class="form-select">
+            <option>Pendente Captação</option>
+            <option>Aguardando Reunião</option>
+            <option>Pendente Proposta</option>
+            <option>Pendente Cliente</option>
+            <option>Captação Concluida</option>
+            <option>Captação Falhou</option>
+          </select>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" id="captureStatusSaveBtn" class="btn btn-xp">Salvar status</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <div class="modal fade" id="similarCompaniesModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Empresas parecidas (dados reais)</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="table-responsive">
+            <table class="table table-modern">
+              <thead><tr><th>Empresa</th><th>Contato</th></tr></thead>
+              <tbody id="similarCompaniesTableBody"><tr><td colspan="2" class="text-muted">Sem dados.</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/sidebar.js"></script>
+  <script src="/js/captacao.js"></script>
+  <script src="/js/ui.js"></script>
+  <script>protectPage();mountSidebar().then(initCaptacaoPage);</script>
+</body>
+</html>
