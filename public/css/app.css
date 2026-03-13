@@ -224,3 +224,38 @@ body {
   background: rgba(255,122,24,.12);
   color: #9a4a00;
 }
+
+.contract-preview-modal {
+  width: 70vw;
+  max-width: 70vw;
+}
+
+.contract-preview-modal .modal-content {
+  height: 94vh;
+  border-radius: 16px;
+}
+
+.contract-preview-modal .modal-body {
+  overflow: hidden;
+}
+
+.contract-preview-editor {
+  height: calc(94vh - 170px);
+  overflow: auto;
+  border: 1px solid rgba(17,24,39,.1);
+  border-radius: 12px;
+  padding: 16px;
+  background: #fff;
+}
+
+.contract-preview-sheet {
+  max-width: 860px;
+  margin: 0 auto;
+}
+
+@media (max-width: 992px) {
+  .contract-preview-modal {
+    width: 96vw;
+    max-width: 96vw;
+  }
+}
