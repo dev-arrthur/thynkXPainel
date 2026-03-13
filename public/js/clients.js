@@ -1,5 +1,6 @@
 let growthChart;
 let cityChart;
+let profitChart;
 
 function money(v) { return `R$ ${Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`; }
 
@@ -136,6 +137,34 @@ async function loadClientDashboardStats() {
       type: 'bar',
       data: { labels: top.map((c) => c.city), datasets: [{ data: top.map((c) => c.total), backgroundColor: '#ffb347' }] },
       options: { responsive: true, plugins: { legend: { display: false } } },
+    });
+  }
+
+
+  const profitCtx = document.getElementById('profitChart');
+  if (profitCtx) {
+    profitChart?.destroy();
+    const pGrowth = data.profitGrowth || [];
+    profitChart = new Chart(profitCtx, {
+      type: 'line',
+      data: {
+        labels: pGrowth.map((p) => p.month),
+        datasets: [{
+          label: 'Lucro (R$)',
+          data: pGrowth.map((p) => p.total),
+          borderColor: '#16a34a',
+          backgroundColor: 'rgba(22,163,74,.15)',
+          fill: true,
+          tension: .32,
+        }],
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: true } },
+        scales: {
+          y: { ticks: { callback: (v) => `R$ ${Number(v).toLocaleString('pt-BR')}` } },
+        },
+      },
     });
   }
 }

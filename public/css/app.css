@@ -174,3 +174,38 @@ body {
   .sidebar { position: relative; width: 100%; min-height: auto; }
   .content-area { margin-left: 0; padding: 1rem; }
 }
+
+.signature-layout .list-group-item {
+  border: 0;
+  border-radius: 10px;
+  margin-bottom: 6px;
+}
+
+.signature-contract-body {
+  max-height: 75vh;
+  overflow: auto;
+  line-height: 1.65;
+}
+
+.signature-animation {
+  font-family: cursive;
+  font-size: 1.4rem;
+  color: #c66a00;
+  border-bottom: 1px dashed rgba(198, 106, 0, .45);
+  width: max-content;
+  animation: signFloat 2.4s ease-in-out infinite;
+}
+
+.signature-pulse {
+  animation: pulseSign .8s ease-in-out infinite;
+}
+
+@keyframes signFloat {
+  0%, 100% { transform: translateY(0); opacity: .75; }
+  50% { transform: translateY(-4px); opacity: 1; }
+}
+
+@keyframes pulseSign {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.03); }
+}

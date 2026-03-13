@@ -18,6 +18,7 @@ const contractSchema = new mongoose.Schema(
     signed: { type: Boolean, default: false },
     signedAt: { type: Date },
     signedBy: { type: String, default: '' },
+    signerPhotoPath: { type: String, default: '' },
   },
   { timestamps: true }
 );
