@@ -237,6 +237,43 @@ app.post('/api/contracts', async (req, res) => {
 app.put('/api/contracts/:id', async (req, res) => res.json(await Contract.findByIdAndUpdate(req.params.id, req.body, { new: true })));
 app.delete('/api/contracts/:id', async (req, res) => { await Contract.findByIdAndDelete(req.params.id); res.json({ ok: true }); });
 
+app.get('/api/contracts/stats/dashboard', async (_req, res) => {
+  const contracts = await Contract.find();
+  const totalContracts = contracts.length;
+  const signedContracts = contracts.filter((c) => c.signed).length;
+  const pendingContracts = totalContracts - signedContracts;
+
+  const signedWithTime = contracts.filter((c) => c.signed && c.signedAt && c.createdAt);
+  const avgSignatureHours = signedWithTime.length
+    ? signedWithTime.reduce((acc, c) => acc + ((new Date(c.signedAt) - new Date(c.createdAt)) / 36e5), 0) / signedWithTime.length
+    : 0;
+
+  const monthlyCreated = {};
+  const monthlySigned = {};
+  const themeMap = {};
+
+  contracts.forEach((c) => {
+    const cm = new Date(c.createdAt).toISOString().slice(0, 7);
+    monthlyCreated[cm] = (monthlyCreated[cm] || 0) + 1;
+    if (c.signedAt) {
+      const sm = new Date(c.signedAt).toISOString().slice(0, 7);
+      monthlySigned[sm] = (monthlySigned[sm] || 0) + 1;
+    }
+    const t = c.clauseTheme || 'Geral';
+    themeMap[t] = (themeMap[t] || 0) + 1;
+  });
+
+  res.json({
+    totalContracts,
+    signedContracts,
+    pendingContracts,
+    avgSignatureHours,
+    monthlyCreated: Object.entries(monthlyCreated).map(([month, total]) => ({ month, total })),
+    monthlySigned: Object.entries(monthlySigned).map(([month, total]) => ({ month, total })),
+    byTheme: Object.entries(themeMap).map(([theme, total]) => ({ theme, total })),
+  });
+});
+
 app.get('/api/contracts/sign/:token', async (req, res) => {
   const contract = await Contract.findOne({ signatureToken: req.params.token });
   if (!contract) return res.status(404).json({ message: 'Contrato não encontrado.' });
@@ -247,7 +284,7 @@ app.post('/api/contracts/sign/:token', async (req, res) => {
   const contract = await Contract.findOne({ signatureToken: req.params.token });
   if (!contract) return res.status(404).json({ message: 'Contrato não encontrado.' });
 
-  const { signedBy, photoDataUrl } = req.body;
+  const { signedBy, photoDataUrl, photoCapturedAt } = req.body;
   contract.signed = true;
   contract.signedAt = new Date();
   contract.signedBy = signedBy || contract.clientName;
@@ -258,6 +295,7 @@ app.post('/api/contracts/sign/:token', async (req, res) => {
     const fileName = `${contract.code}-assinatura.${ext}`;
     fs.writeFileSync(path.join(contractsDir, fileName), Buffer.from(base64, 'base64'));
     contract.signerPhotoPath = `/Contratos/${fileName}`;
+    contract.signerPhotoCapturedAt = photoCapturedAt ? new Date(photoCapturedAt) : new Date();
   }
 
   await contract.save();

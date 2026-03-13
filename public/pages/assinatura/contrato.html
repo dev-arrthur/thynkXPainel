@@ -28,18 +28,21 @@
       <aside class="col-xl-3 col-lg-3">
         <div class="glass-card p-3">
           <h6><i class="bi bi-pen me-1"></i>Assinatura Digital</h6>
-          <div id="signatureAnimation" class="signature-animation mb-2">thynkXP Sistemas</div>
+          <div id="signatureAnimation" class="signature-animation mb-2">thynkXP Sistemas &amp; Soluções</div>
           <label class="form-label">Nome do responsável</label>
           <input id="signedBy" class="form-control mb-2" placeholder="Nome do responsável">
-          <label class="form-label">Comprovante/Prova do Responsável (foto)</label>
-          <input id="signerPhoto" class="form-control mb-2" type="file" accept="image/*" capture="user">
-          <img id="photoPreview" class="img-fluid rounded border d-none mb-2" alt="Prévia da foto">
-          <button id="signButton" class="btn btn-xp w-100">Assinar digitalmente</button>
+          <label class="form-label">Comprovante/Prova do Responsável (foto tirada na hora)</label>
+          <input id="signerPhoto" class="form-control mb-1" type="file" accept="image/*" capture="user">
+          <small class="text-muted d-block mb-2">Use a câmera do dispositivo para tirar a foto agora.</small>
+          <img id="photoPreview" class="img-fluid rounded border d-none mb-1" alt="Prévia da foto">
+          <small id="photoCapturedAtLabel" class="text-muted d-none">Foto retirada: -</small>
+          <button id="signButton" class="btn btn-xp w-100 mt-2">Assinar digitalmente</button>
           <div id="signFeedback" class="alert d-none mt-2"></div>
           <hr>
           <p class="mb-1"><strong>Assinado dia:</strong> <span id="signedAtInfo">-</span></p>
           <p class="mb-1"><strong>Comprovante/Prova do Responsável</strong></p>
-          <img id="proofImage" class="img-fluid rounded border d-none" alt="Foto do responsável">
+          <img id="proofImage" class="img-fluid rounded border d-none mb-1" alt="Foto do responsável">
+          <small id="proofCapturedAt" class="text-muted d-none">Foto retirada: -</small>
         </div>
       </aside>
     </div>

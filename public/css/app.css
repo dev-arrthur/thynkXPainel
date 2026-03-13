@@ -188,12 +188,13 @@ body {
 }
 
 .signature-animation {
-  font-family: cursive;
-  font-size: 1.4rem;
-  color: #c66a00;
-  border-bottom: 1px dashed rgba(198, 106, 0, .45);
+  font-family: 'Inter', sans-serif;
+  font-size: 1rem;
+  font-weight: 500;
+  color: #111111;
+  border-bottom: 1px dashed rgba(17, 24, 39, .25);
   width: max-content;
-  animation: signFloat 2.4s ease-in-out infinite;
+  padding-bottom: 3px;
 }
 
 .signature-pulse {
@@ -208,4 +209,18 @@ body {
 @keyframes pulseSign {
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.03); }
+}
+
+
+.signature-layout .glass-card {
+  box-shadow: 0 12px 34px rgba(15,23,42,.12);
+}
+
+.signature-layout .list-group-item {
+  transition: .2s ease;
+}
+
+.signature-layout .list-group-item:hover {
+  background: rgba(255,122,24,.12);
+  color: #9a4a00;
 }

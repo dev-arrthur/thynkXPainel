@@ -11,15 +11,24 @@ function toDataUrl(file) {
   });
 }
 
+function formatDate(value) {
+  return value ? new Date(value).toLocaleString('pt-BR') : '-';
+}
+
 function fillSignedInfo(contract) {
   const signedAtInfo = document.getElementById('signedAtInfo');
   const proofImage = document.getElementById('proofImage');
-  signedAtInfo.textContent = contract.signedAt ? new Date(contract.signedAt).toLocaleString('pt-BR') : '-';
+  const proofCapturedAt = document.getElementById('proofCapturedAt');
+
+  signedAtInfo.textContent = formatDate(contract.signedAt);
   if (contract.signerPhotoPath) {
     proofImage.src = contract.signerPhotoPath;
     proofImage.classList.remove('d-none');
+    proofCapturedAt.textContent = `Foto retirada: ${formatDate(contract.signerPhotoCapturedAt)}`;
+    proofCapturedAt.classList.remove('d-none');
   } else {
     proofImage.classList.add('d-none');
+    proofCapturedAt.classList.add('d-none');
   }
 }
 
@@ -34,15 +43,14 @@ async function loadContractToSign() {
   document.getElementById('contractTitle').textContent = `Contrato ${contract.code} - ${contract.clientName}`;
   document.getElementById('signedBy').value = contract.signedBy || contract.clientName;
 
-  const body = document.getElementById('contractBody');
-  body.innerHTML = `
+  document.getElementById('contractBody').innerHTML = `
     <h6 id="dados">Dados do cliente</h6>
     <p><strong>Documento:</strong> ${contract.clientDocument}<br><strong>Email:</strong> ${contract.clientEmail}<br><strong>Telefone:</strong> ${contract.clientPhone}<br><strong>Valor:</strong> R$ ${Number(contract.contractValue).toLocaleString('pt-BR',{minimumFractionDigits:2})}</p>
     <h6 id="descricao">Descrição</h6>
     <p>${contract.descriptionText || 'Sem descrição informada.'}</p>
     <h6 id="clausulas">Cláusulas</h6>
     <ol>${(contract.clauses || []).map((c) => `<li>${c}</li>`).join('')}</ol>
-    <p><em>Contrato emitido e assinado pela thynkXP Sistemas.</em></p>
+    <p><em>Contrato emitido e assinado pela thynkXP Sistemas & Soluções.</em></p>
   `;
 
   document.getElementById('contractNav').innerHTML = `
@@ -56,12 +64,18 @@ async function loadContractToSign() {
   const feedback = document.getElementById('signFeedback');
   const photoInput = document.getElementById('signerPhoto');
   const photoPreview = document.getElementById('photoPreview');
+  const photoCapturedAtLabel = document.getElementById('photoCapturedAtLabel');
+
+  let selectedPhotoCapturedAt = null;
 
   photoInput.addEventListener('change', async () => {
     const file = photoInput.files?.[0];
     if (!file) return;
     photoPreview.src = await toDataUrl(file);
     photoPreview.classList.remove('d-none');
+    selectedPhotoCapturedAt = new Date().toISOString();
+    photoCapturedAtLabel.textContent = `Foto retirada: ${formatDate(selectedPhotoCapturedAt)}`;
+    photoCapturedAtLabel.classList.remove('d-none');
   });
 
   fillSignedInfo(contract);
@@ -78,7 +92,7 @@ async function loadContractToSign() {
     const file = photoInput.files?.[0];
     if (!file && !contract.signerPhotoPath) {
       feedback.className = 'alert alert-warning mt-2';
-      feedback.textContent = 'Para concluir a assinatura digital, envie a foto do responsável.';
+      feedback.textContent = 'Para concluir a assinatura digital, envie a foto do responsável tirada na hora.';
       feedback.classList.remove('d-none');
       return;
     }
@@ -89,7 +103,7 @@ async function loadContractToSign() {
     const res = await fetch(`/api/contracts/sign/${token}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ signedBy, photoDataUrl }),
+      body: JSON.stringify({ signedBy, photoDataUrl, photoCapturedAt: selectedPhotoCapturedAt }),
     });
 
     const payload = await res.json();
