@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: thynkxp-painel
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: MONGODB_URI
+        sync: false
+      - key: ADMIN_EMAIL
+        value: admin@thynkxp.com
+      - key: ADMIN_PASSWORD
+        sync: false
