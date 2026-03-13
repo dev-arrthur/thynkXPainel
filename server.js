@@ -24,6 +24,41 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 const fmtCode = (prefix, n) => `${prefix}-${String(n).padStart(3, '0')}`;
 
+
+function escapePdfText(text) {
+  return String(text || '')
+    .replace(/\\/g, '\\\\')
+    .replace(/\(/g, '\\(')
+    .replace(/\)/g, '\\)');
+}
+
+function buildSimplePdf(lines) {
+  const textOps = lines.map((line) => `(${escapePdfText(line)}) Tj`).join(' T*\n');
+  const stream = `BT\n/F1 11 Tf\n50 780 Td\n14 TL\n${textOps}\nET`;
+  const objects = [];
+  objects[1] = '<< /Type /Catalog /Pages 2 0 R >>';
+  objects[2] = '<< /Type /Pages /Kids [3 0 R] /Count 1 >>';
+  objects[3] = '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>';
+  objects[4] = `<< /Length ${Buffer.byteLength(stream, 'utf8')} >>\nstream\n${stream}\nendstream`;
+  objects[5] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>';
+
+  let pdf = '%PDF-1.4\n';
+  const offsets = [0];
+  for (let i = 1; i < objects.length; i += 1) {
+    offsets[i] = Buffer.byteLength(pdf, 'utf8');
+    pdf += `${i} 0 obj\n${objects[i]}\nendobj\n`;
+  }
+
+  const xrefOffset = Buffer.byteLength(pdf, 'utf8');
+  pdf += `xref\n0 ${objects.length}\n`;
+  pdf += '0000000000 65535 f \n';
+  for (let i = 1; i < objects.length; i += 1) {
+    pdf += `${String(offsets[i]).padStart(10, '0')} 00000 n \n`;
+  }
+  pdf += `trailer\n<< /Size ${objects.length} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+  return Buffer.from(pdf, 'utf8');
+}
+
 async function nextCode(Model, prefix) {
   const last = await Model.findOne({ code: new RegExp(`^${prefix}-`) }).sort({ createdAt: -1 });
   const n = last ? Number((last.code.split('-')[1] || '0')) + 1 : 1;
@@ -183,9 +218,24 @@ app.post('/api/contracts', async (req, res) => {
     const signatureToken = crypto.randomBytes(20).toString('hex');
     const pdfName = `${code}.pdf`;
     const pdfPath = `/Contratos/${pdfName}`;
-    const content = `Contrato ${code}\nCliente: ${client.companyName}\nCNPJ/CPF: ${client.companyDocument}\nValor: R$ ${Number(client.contractValue).toFixed(2)}\n\nDescrição:\n${descriptionText || ''}\n\nCláusulas:\n${(clauses || []).join('\n- ')}`;
-    fs.writeFileSync(path.join(contractsDir, pdfName), content);
-
+    const lines = [
+      `Contrato ${code}`,
+      'Empresa contratada: thynkXP Sistemas',
+      `Cliente: ${client.companyName}`,
+      `CNPJ/CPF: ${client.companyDocument}`,
+      `Valor: R$ ${Number(client.contractValue).toFixed(2)}`,
+      '',
+      'Descrição:',
+      ...(descriptionText ? [descriptionText] : ['Sem descrição informada.']),
+      '',
+      `Tema da cláusula: ${clauseTheme || 'Geral'}`,
+      'Cláusulas:',
+      ...((clauses || []).map((c, idx) => `${idx + 1}) ${c}`)),
+      '',
+      'Contrato emitido por thynkXP Sistemas.',
+    ];
+    const pdfBuffer = buildSimplePdf(lines);
+    fs.writeFileSync(path.join(contractsDir, pdfName), pdfBuffer);
     const contract = await Contract.create({
       code,
       clientId: client._id,

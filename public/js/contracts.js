@@ -38,7 +38,7 @@ async function loadContracts() {
   table.innerHTML = contracts.map((c) => `
     <tr>
       <td>${c.code}</td><td>${c.clientName}</td><td>${c.clientDocument}</td><td class="text-success fw-semibold">R$ ${Number(c.contractValue||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
-      <td><a href="${c.pdfPath}" target="_blank">Baixar PDF</a></td>
+      <td><a class="btn btn-sm btn-outline-primary" href="${c.pdfPath}" target="_blank" rel="noopener">Visualizar PDF</a></td>
       <td><a href="/pages/assinatura/contrato.html?token=${c.signatureToken}" target="_blank">${c.signed ? 'Assinado' : 'Aguardando assinatura'}</a></td>
       <td>${contractActions(c._id)}</td>
     </tr>`).join('');
