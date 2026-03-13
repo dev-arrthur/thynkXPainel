@@ -8,6 +8,7 @@ const dotenv = require('dotenv');
 const Admin = require('./models/Admin');
 const Client = require('./models/Client');
 const Contract = require('./models/Contract');
+const LeadCapture = require('./models/LeadCapture');
 
 dotenv.config();
 
@@ -23,6 +24,54 @@ app.use('/Contratos', express.static(contractsDir));
 app.use(express.static(path.join(__dirname, 'public')));
 
 const fmtCode = (prefix, n) => `${prefix}-${String(n).padStart(3, '0')}`;
+
+
+const CAPTACAO_CATEGORIES = [
+  'Clínicas', 'Hospitais', 'Borracharias', 'Restaurantes', 'Pizzarias', 'Padarias', 'Supermercados',
+  'Farmácias', 'Academias', 'Pet Shops', 'Salões de Beleza', 'Barbearias', 'Auto Peças', 'Oficinas Mecânicas',
+  'Lojas de Roupas', 'Calçados', 'Óticas', 'Escolas', 'Cursos', 'Imobiliárias', 'Construtoras',
+  'Escritórios de Advocacia', 'Contabilidades', 'Consultorias', 'Laboratórios', 'Clínicas Odontológicas',
+  'Hotéis', 'Pousadas', 'Agências de Turismo', 'Lava Jatos', 'Postos de Combustível', 'Materiais de Construção',
+  'Móveis Planejados', 'Eventos e Buffet', 'Fotografia', 'Marketing Digital', 'Tecnologia da Informação',
+  'SaaS', 'E-commerce', 'Atacadistas', 'Distribuidoras', 'Transportadoras', 'Seguradoras', 'Bancos',
+  'Cooperativas', 'Igrejas', 'ONGs', 'Prefeituras', 'Serviços Públicos', 'Condomínios', 'Coworkings'
+];
+
+function normalizeStatus(status) {
+  const valid = [
+    'Pendente Captação',
+    'Aguardando Reunião',
+    'Pendente Proposta',
+    'Pendente Cliente',
+    'Captação Concluida',
+    'Captação Falhou',
+  ];
+  return valid.includes(status) ? status : 'Pendente Captação';
+}
+
+function bucketColor(n) {
+  if (n <= 3) return 'red';
+  if (n <= 6) return 'yellow';
+  if (n <= 11) return 'green';
+  return 'blue';
+}
+
+function categoryToOverpass(category) {
+  const c = (category || '').toLowerCase();
+  if (c.includes('hospital')) return 'amenity=hospital';
+  if (c.includes('clín') || c.includes('clinic')) return 'amenity=clinic';
+  if (c.includes('farm')) return 'amenity=pharmacy';
+  if (c.includes('rest')) return 'amenity=restaurant';
+  if (c.includes('pizz')) return 'amenity=restaurant';
+  if (c.includes('barbear')) return 'shop=hairdresser';
+  if (c.includes('sal')) return 'shop=beauty';
+  if (c.includes('borrach')) return 'shop=tyres';
+  if (c.includes('academ')) return 'leisure=fitness_centre';
+  if (c.includes('pet')) return 'shop=pet';
+  if (c.includes('hotel') || c.includes('pous')) return 'tourism=hotel';
+  return 'shop=*';
+}
+
 
 function escapePdfText(text) {
   return String(text || '')
@@ -300,6 +349,126 @@ app.post('/api/contracts/sign/:token', async (req, res) => {
 
   await contract.save();
   res.json(contract);
+});
+
+
+app.get('/api/captacao/categories', (req, res) => {
+  const q = (req.query.q || '').toLowerCase();
+  const list = CAPTACAO_CATEGORIES.filter((c) => !q || c.toLowerCase().includes(q)).slice(0, 20);
+  res.json(list);
+});
+
+app.get('/api/captacao/locations', async (req, res) => {
+  try {
+    const q = (req.query.q || '').trim();
+    if (!q) return res.json([]);
+    const url = `https://nominatim.openstreetmap.org/search?format=json&countrycodes=br&limit=8&q=${encodeURIComponent(q)}`;
+    const r = await fetch(url, { headers: { 'User-Agent': 'thynkxp-painel/1.0' } });
+    const data = await r.json();
+    res.json((data || []).map((d) => ({
+      display_name: d.display_name,
+      lat: Number(d.lat),
+      lon: Number(d.lon),
+    })));
+  } catch {
+    res.json([]);
+  }
+});
+
+app.get('/api/captacao', async (_req, res) => {
+  const items = await LeadCapture.find().sort({ createdAt: -1 });
+  res.json(items);
+});
+
+app.post('/api/captacao/run', async (req, res) => {
+  try {
+    const {
+      scheduled,
+      scheduledAt,
+      category,
+      location,
+      lat,
+      lon,
+      radius,
+      collectInfo,
+      quantity,
+    } = req.body;
+
+    const qty = Math.min(10, Math.max(1, Number(quantity || 5)));
+    const rad = Math.min(30000, Math.max(500, Number(radius || 3000)));
+    const overpassTag = categoryToOverpass(category);
+
+    const query = `[out:json][timeout:25];(node[${overpassTag}](around:${rad},${lat},${lon});way[${overpassTag}](around:${rad},${lat},${lon});relation[${overpassTag}](around:${rad},${lat},${lon}););out center tags ${qty};`;
+    const or = await fetch('https://overpass-api.de/api/interpreter', {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: query,
+    });
+    const od = await or.json();
+    const elements = (od.elements || []).slice(0, qty);
+
+    const docs = [];
+    for (const e of elements) {
+      const tags = e.tags || {};
+      const name = tags.name || 'Não Encontrado';
+      const lc = await LeadCapture.create({
+        name,
+        category: category || 'Não informado',
+        status: 'Pendente Captação',
+        scheduled: !!scheduled,
+        scheduledAt: scheduledAt ? new Date(scheduledAt) : undefined,
+        city: location || 'Não informado',
+        address: tags['addr:full'] || tags['addr:street'] || 'Não Encontrado',
+        email: collectInfo ? (tags.email || 'Não Encontrado') : 'Não Encontrado',
+        phone: collectInfo ? (tags.phone || tags['contact:phone'] || 'Não Encontrado') : 'Não Encontrado',
+        site: collectInfo ? (tags.website || tags['contact:website'] || 'Não Encontrado') : 'Não Encontrado',
+        social: collectInfo ? (tags.facebook || tags.instagram || tags['contact:facebook'] || tags['contact:instagram'] || 'Não Encontrado') : 'Não Encontrado',
+        lat: e.lat || e.center?.lat,
+        lon: e.lon || e.center?.lon,
+        metadata: { overpassId: e.id, tags },
+      });
+      docs.push(lc);
+    }
+
+    res.status(201).json({ created: docs.length, items: docs });
+  } catch (error) {
+    res.status(500).json({ message: 'Falha na captação automática.', details: error.message });
+  }
+});
+
+app.patch('/api/captacao/:id/status', async (req, res) => {
+  const status = normalizeStatus(req.body.status);
+  const item = await LeadCapture.findByIdAndUpdate(req.params.id, { status }, { new: true });
+  res.json(item);
+});
+
+app.delete('/api/captacao/:id', async (req, res) => {
+  await LeadCapture.findByIdAndDelete(req.params.id);
+  res.json({ ok: true });
+});
+
+app.get('/api/captacao/stats', async (_req, res) => {
+  const items = await LeadCapture.find();
+  const success = items.filter((i) => i.status === 'Captação Concluida');
+
+  const pointMap = {};
+  success.forEach((s) => {
+    if (typeof s.lat !== 'number' || typeof s.lon !== 'number') return;
+    const key = `${s.lat.toFixed(2)}|${s.lon.toFixed(2)}`;
+    if (!pointMap[key]) pointMap[key] = { lat: s.lat, lon: s.lon, count: 0 };
+    pointMap[key].count += 1;
+  });
+
+  const timeline = {};
+  items.forEach((i) => {
+    const m = new Date(i.createdAt).toISOString().slice(0, 10);
+    timeline[m] = (timeline[m] || 0) + 1;
+  });
+
+  res.json({
+    points: Object.values(pointMap).map((p) => ({ ...p, color: bucketColor(p.count) })),
+    timeline: Object.entries(timeline).map(([date, total]) => ({ date, total })),
+  });
 });
 
 app.get('/health', (_req, res) => res.status(200).json({ status: 'ok' }));
