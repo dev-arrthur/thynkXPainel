@@ -397,6 +397,13 @@ app.get('/api/captacao/categories', (req, res) => {
   res.json(list);
 });
 
+app.get('/api/captacao/categories/check', (req, res) => {
+  const q = String(req.query.q || '').trim().toLowerCase();
+  const exists = CAPTACAO_CATEGORIES.some((c) => c.toLowerCase() === q);
+  const suggestions = CAPTACAO_CATEGORIES.filter((c) => !q || c.toLowerCase().includes(q)).slice(0, 5);
+  res.json({ exists, suggestions });
+});
+
 app.get('/api/captacao/locations', async (req, res) => {
   try {
     const q = (req.query.q || '').trim();
@@ -414,8 +421,26 @@ app.get('/api/captacao/locations', async (req, res) => {
   }
 });
 
-app.get('/api/captacao', async (_req, res) => {
-  const items = await LeadCapture.find().sort({ createdAt: -1 });
+app.get('/api/captacao', async (req, res) => {
+  const q = String(req.query.q || '').trim();
+  const status = String(req.query.status || '').trim();
+  const category = String(req.query.category || '').trim();
+
+  const query = {};
+  if (status) query.status = status;
+  if (category) query.category = { $regex: category, $options: 'i' };
+  if (q) {
+    query.$or = [
+      { name: { $regex: q, $options: 'i' } },
+      { address: { $regex: q, $options: 'i' } },
+      { email: { $regex: q, $options: 'i' } },
+      { phone: { $regex: q, $options: 'i' } },
+      { site: { $regex: q, $options: 'i' } },
+      { social: { $regex: q, $options: 'i' } },
+    ];
+  }
+
+  const items = await LeadCapture.find(query).sort({ createdAt: -1 }).limit(300);
   res.json(items);
 });
 
