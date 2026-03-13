@@ -39,6 +39,7 @@ const CLAUSE_LIBRARY = {
 const state = {
   currentContractDraft: null,
   previewModal: null,
+  contractsCache: [],
 };
 
 function showContractFeedback(message, type = 'danger') {
@@ -68,9 +69,7 @@ function ensureMinimumClauses() {
 }
 
 function getClausesFromInputs() {
-  return [...document.querySelectorAll('#clausesContainer .clause-input')]
-    .map((input) => input.value.trim())
-    .filter(Boolean);
+  return [...document.querySelectorAll('#clausesContainer .clause-input')].map((i) => i.value.trim()).filter(Boolean);
 }
 
 async function loadClientsForContracts() {
@@ -79,6 +78,7 @@ async function loadClientsForContracts() {
   const response = await fetch('/api/clients');
   const clients = await response.json();
   select.innerHTML = '<option value="">Selecione o cliente</option>' + clients.map((c) => `<option value="${c._id}" data-name="${c.companyName}" data-doc="${c.companyDocument}" data-email="${c.companyEmail}" data-phone="${c.companyPhone}" data-value="${c.contractValue}">${c.code} - ${c.companyName}</option>`).join('');
+
   select.addEventListener('change', () => {
     const opt = select.selectedOptions[0];
     document.getElementById('contractClientDoc').value = opt?.dataset?.doc || '';
@@ -87,9 +87,8 @@ async function loadClientsForContracts() {
     document.getElementById('contractClientValue').value = `R$ ${Number(opt?.dataset?.value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
   });
 
-  const descriptionModel = document.getElementById('descriptionModel');
-  descriptionModel?.addEventListener('change', () => {
-    if (descriptionModel.value) document.getElementById('descriptionText').value = descriptionModel.value;
+  document.getElementById('descriptionModel')?.addEventListener('change', (e) => {
+    if (e.target.value) document.getElementById('descriptionText').value = e.target.value;
   });
 }
 
@@ -97,18 +96,66 @@ function contractActions(id) {
   return `<button class="btn btn-sm btn-outline-danger" onclick="deleteContract('${id}')">Excluir</button>`;
 }
 
-async function loadContracts() {
+function getDateOnly(value) {
+  return value ? new Date(value).toISOString().slice(0, 10) : '';
+}
+
+function filterContracts(list) {
+  const search = (document.getElementById('contractsSearch')?.value || '').trim().toLowerCase();
+  const theme = document.getElementById('contractsThemeFilter')?.value || '';
+  const start = document.getElementById('contractsStartDate')?.value || '';
+  const end = document.getElementById('contractsEndDate')?.value || '';
+
+  return list.filter((c) => {
+    const hay = `${c.code || ''} ${c.clientName || ''} ${c.clientDocument || ''}`.toLowerCase();
+    const bySearch = !search || hay.includes(search);
+    const byTheme = !theme || (c.clauseTheme || '') === theme;
+    const created = getDateOnly(c.createdAt);
+    const byStart = !start || created >= start;
+    const byEnd = !end || created <= end;
+    return bySearch && byTheme && byStart && byEnd;
+  });
+}
+
+function renderContractsTable(contracts) {
   const table = document.getElementById('contractsTableBody');
   if (!table) return;
-  const response = await fetch('/api/contracts');
-  const contracts = await response.json();
   table.innerHTML = contracts.map((c) => `
     <tr>
-      <td>${c.code}</td><td>${c.clientName}</td><td>${c.clientDocument}</td><td class="text-success fw-semibold">R$ ${Number(c.contractValue||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
+      <td>${c.code}</td>
+      <td>${c.clientName}</td>
+      <td>${c.clientDocument}</td>
+      <td><span class="badge text-bg-light border">${c.clauseTheme || 'Geral'}</span></td>
+      <td class="text-success fw-semibold">R$ ${Number(c.contractValue||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
       <td><a class="btn btn-sm btn-outline-primary" href="${c.pdfPath}" target="_blank" rel="noopener">Visualizar PDF</a></td>
       <td><a href="/pages/assinatura/contrato.html?token=${c.signatureToken}" target="_blank">${c.signed ? 'Assinado' : 'Aguardando assinatura'}</a></td>
       <td>${contractActions(c._id)}</td>
     </tr>`).join('');
+}
+
+async function loadContracts() {
+  const response = await fetch('/api/contracts');
+  const contracts = await response.json();
+  state.contractsCache = Array.isArray(contracts) ? contracts : [];
+  renderContractsTable(filterContracts(state.contractsCache));
+}
+
+function bindContractsFilters() {
+  const ids = ['contractsSearch', 'contractsThemeFilter', 'contractsStartDate', 'contractsEndDate'];
+  ids.forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('input', () => renderContractsTable(filterContracts(state.contractsCache)));
+    el.addEventListener('change', () => renderContractsTable(filterContracts(state.contractsCache)));
+  });
+
+  document.getElementById('clearContractsFilters')?.addEventListener('click', () => {
+    ids.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+    renderContractsTable(filterContracts(state.contractsCache));
+  });
 }
 
 function buildDraftFromForm() {
@@ -141,9 +188,18 @@ function renderPreviewEditor(draft) {
       <p class="mb-2">${draft.clauseTheme}</p>
       <h6>Cláusulas (editáveis)</h6>
       <div id="previewClausesEdit" class="d-grid gap-2">${draft.clauses.map((c, i) => `<div class="input-group"><span class="input-group-text">${i + 1}</span><input class="form-control preview-clause" value="${c.replace(/"/g, '&quot;')}"></div>`).join('')}</div>
-      <p class="text-muted small mt-3 mb-0">Role toda a pré-visualização para revisar o contrato por completo antes de confirmar.</p>
+      <hr>
+      <div class="form-check mt-3">
+        <input class="form-check-input" type="checkbox" id="confirmPreviewCheck">
+        <label class="form-check-label" for="confirmPreviewCheck">Li e revisei o contrato por completo. Confirmo a geração do PDF.</label>
+      </div>
+      <p class="text-muted small mt-2 mb-0">A confirmação acima (ao final do contrato) é obrigatória para liberar o botão de geração.</p>
     </div>
   `;
+
+  document.getElementById('confirmPreviewCheck')?.addEventListener('change', (e) => {
+    document.getElementById('confirmGenerateBtn').disabled = !e.target.checked;
+  });
 }
 
 function syncPreviewToDraft() {
@@ -156,15 +212,13 @@ function initContractBuilder() {
   const addClauseBtn = document.getElementById('addClauseBtn');
   const loadThemeClausesBtn = document.getElementById('loadThemeClausesBtn');
   const openPreviewBtn = document.getElementById('openPreviewBtn');
-  const confirmCheck = document.getElementById('confirmPreviewCheck');
   const confirmGenerateBtn = document.getElementById('confirmGenerateBtn');
 
   state.previewModal = new bootstrap.Modal(document.getElementById('contractPreviewModal'));
   ensureMinimumClauses();
+  bindContractsFilters();
 
-  addClauseBtn?.addEventListener('click', () => {
-    document.getElementById('clausesContainer').appendChild(createClauseInput(''));
-  });
+  addClauseBtn?.addEventListener('click', () => document.getElementById('clausesContainer').appendChild(createClauseInput('')));
 
   loadThemeClausesBtn?.addEventListener('click', () => {
     const theme = document.getElementById('clauseTheme').value;
@@ -176,23 +230,12 @@ function initContractBuilder() {
 
   openPreviewBtn?.addEventListener('click', () => {
     const draft = buildDraftFromForm();
-    if (!draft.clientId) {
-      showContractFeedback('Selecione um cliente antes de abrir o preview.');
-      return;
-    }
-    if (!draft.clauses.length) {
-      showContractFeedback('Adicione ao menos 1 cláusula para gerar o contrato.');
-      return;
-    }
+    if (!draft.clientId) return showContractFeedback('Selecione um cliente antes de abrir o preview.');
+    if (!draft.clauses.length) return showContractFeedback('Adicione ao menos 1 cláusula para gerar o contrato.');
     state.currentContractDraft = draft;
     renderPreviewEditor(draft);
-    confirmCheck.checked = false;
     confirmGenerateBtn.disabled = true;
     state.previewModal.show();
-  });
-
-  confirmCheck?.addEventListener('change', () => {
-    confirmGenerateBtn.disabled = !confirmCheck.checked;
   });
 
   confirmGenerateBtn?.addEventListener('click', async () => {
@@ -201,12 +244,7 @@ function initContractBuilder() {
     const response = await fetch('/api/contracts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        clientId: draft.clientId,
-        descriptionText: draft.descriptionText,
-        clauseTheme: draft.clauseTheme,
-        clauses: draft.clauses,
-      }),
+      body: JSON.stringify({ clientId: draft.clientId, descriptionText: draft.descriptionText, clauseTheme: draft.clauseTheme, clauses: draft.clauses }),
     });
     const payload = await response.json();
     if (!response.ok) return showContractFeedback(payload.message || 'Erro ao criar contrato');
