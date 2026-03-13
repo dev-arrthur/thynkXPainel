@@ -12,19 +12,25 @@ async function mountSidebar() {
     const initial = document.getElementById('sidebarInitial');
     if (name) name.textContent = session.name;
     if (email) email.textContent = session.email;
-    if (initial) initial.textContent = session.name[0].toUpperCase();
+    if (initial) initial.textContent = session.name?.[0]?.toUpperCase() || 'A';
   }
 
-  const logoutButton = document.getElementById('logoutButton');
-  logoutButton?.addEventListener('click', () => {
-    clearSession();
-    window.location.href = '/index.html';
-  });
-
   const currentPath = window.location.pathname;
+  let hasDocChildActive = false;
   document.querySelectorAll('.sidebar .nav-link[href]').forEach((link) => {
     if (link.getAttribute('href') === currentPath) {
       link.classList.add('active');
+      if (currentPath.includes('/pages/documentacao-')) hasDocChildActive = true;
     }
+  });
+
+  if (hasDocChildActive) {
+    const docMenu = document.getElementById('docMenu');
+    docMenu?.classList.add('show');
+  }
+
+  document.getElementById('logoutButton')?.addEventListener('click', () => {
+    clearSession();
+    window.location.href = '/index.html';
   });
 }
